@@ -8,27 +8,30 @@ from torch.nn import Module
 
 
 class StopVariable(Enum):
-    LOSS = auto()
+    LOSS     = auto()
     ACCURACY = auto()
-    NONE = auto()
-
+    NONE     = auto()
 
 class Best(Enum):
     RANKED = auto()
-    ALL = auto()
+    ALL    = auto()
 
 
 stopping_args = dict(
-        stop_varnames=[StopVariable.ACCURACY, StopVariable.LOSS],
-        patience=100, max_epochs=10000, remember=Best.RANKED)
+    stop_varnames=[StopVariable.ACCURACY, StopVariable.LOSS],
+    patience=100,
+    max_epochs=10000,
+    remember=Best.RANKED
+)
 
 
 class EarlyStopping:
     def __init__(
             self, model: Module, stop_varnames: List[StopVariable],
             patience: int = 10, max_epochs: int = 200, remember: Best = Best.ALL):
+        
         self.model = model
-        self.comp_ops = []
+        self.comp_ops  = []
         self.stop_vars = []
         self.best_vals = []
         for stop_varname in stop_varnames:
@@ -40,6 +43,7 @@ class EarlyStopping:
                 self.stop_vars.append('acc')
                 self.comp_ops.append(operator.ge)
                 self.best_vals.append(-np.inf)
+        
         self.remember = remember
         self.remembered_vals = copy.copy(self.best_vals)
         self.max_patience = patience
@@ -51,13 +55,15 @@ class EarlyStopping:
     def check(self, values: List[np.floating], epoch: int) -> bool:
         checks = [self.comp_ops[i](val, self.best_vals[i])
                   for i, val in enumerate(values)]
+        
         if any(checks):
             self.best_vals = np.choose(checks, [self.best_vals, values])
             self.patience = self.max_patience
-
+            
             comp_remembered = [
                     self.comp_ops[i](val, self.remembered_vals[i])
                     for i, val in enumerate(values)]
+            
             if self.remember is Best.ALL:
                 if all(comp_remembered):
                     self.best_epoch = epoch
