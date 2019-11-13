@@ -7,11 +7,12 @@ from .utils import MixedDropout, sparse_matrix_to_torch
 
 
 def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
-    nnodes = adj_matrix.shape[0]
-    A = adj_matrix + sp.eye(nnodes)
-    D_vec = np.sum(A, axis=1).A1
+    nnodes             = adj_matrix.shape[0]
+    A                  = adj_matrix + sp.eye(nnodes)
+    D_vec              = np.sum(A, axis=1).A1
     D_vec_invsqrt_corr = 1 / np.sqrt(D_vec)
-    D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
+    D_invsqrt_corr     = sp.diags(D_vec_invsqrt_corr)
+    
     return D_invsqrt_corr @ A @ D_invsqrt_corr
 
 

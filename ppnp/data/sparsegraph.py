@@ -41,16 +41,17 @@ class SparseGraph:
             attr_names: np.ndarray = None,
             class_names: np.ndarray = None,
             metadata: Any = None):
+        
         # Make sure that the dimensions of matrices / arrays all agree
         if sp.isspmatrix(adj_matrix):
             adj_matrix = adj_matrix.tocsr().astype(np.float32)
         else:
             raise ValueError("Adjacency matrix must be in sparse format (got {0} instead)."
                              .format(type(adj_matrix)))
-
+            
         if adj_matrix.shape[0] != adj_matrix.shape[1]:
             raise ValueError("Dimensions of the adjacency matrix don't agree.")
-
+            
         if attr_matrix is not None:
             if sp.isspmatrix(attr_matrix):
                 attr_matrix = attr_matrix.tocsr().astype(np.float32)
@@ -59,7 +60,7 @@ class SparseGraph:
             else:
                 raise ValueError("Attribute matrix must be a sp.spmatrix or a np.ndarray (got {0} instead)."
                                  .format(type(attr_matrix)))
-
+                
             if attr_matrix.shape[0] != adj_matrix.shape[0]:
                 raise ValueError("Dimensions of the adjacency and attribute matrices don't agree.")
 
@@ -75,14 +76,14 @@ class SparseGraph:
             if len(attr_names) != attr_matrix.shape[1]:
                 raise ValueError("Dimensions of the attribute matrix and the attribute names don't agree.")
 
-        self.adj_matrix = adj_matrix
+        self.adj_matrix  = adj_matrix
         self.attr_matrix = attr_matrix
-        self.labels = labels
-        self.node_names = node_names
-        self.attr_names = attr_names
+        self.labels      = labels
+        self.node_names  = node_names
+        self.attr_names  = attr_names
         self.class_names = class_names
-        self.metadata = metadata
-
+        self.metadata    = metadata
+        
     def num_nodes(self) -> int:
         """Get the number of nodes in the graph.
         """

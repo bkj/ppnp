@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 
+from tqdm import trange
+
 from ..data.sparsegraph import SparseGraph
 from ..preprocessing import gen_seeds, gen_splits, normalize_attributes
 from .earlystopping import EarlyStopping, stopping_args
@@ -23,12 +25,19 @@ def get_dataloaders(idx, labels_np, batch_size=None):
 
 
 def train_model(
-        name: str, model_class: Type[nn.Module], graph: SparseGraph, model_args: dict,
-        learning_rate: float, reg_lambda: float,
+        name: str,
+        model_class: Type[nn.Module],
+        graph: SparseGraph,
+        model_args: dict,
+        learning_rate: float,
+        reg_lambda: float,
         idx_split_args: dict = {'ntrain_per_class': 20, 'nstopping': 500, 'nknown': 1500, 'seed': 2413340114},
         stopping_args: dict = stopping_args,
-        test: bool = False, device: str = 'cuda',
-        torch_seed: int = None, print_interval: int = 10) -> nn.Module:
+        test: bool = False,
+        device: str = 'cuda',
+        torch_seed: int = None,
+        print_interval: int = 10) -> nn.Module:
+    
     labels_all = graph.labels
     idx_np = {}
     idx_np['train'], idx_np['stopping'], idx_np['valtest'] = gen_splits(
@@ -49,16 +58,16 @@ def train_model(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    dataloaders = get_dataloaders(idx_all, labels_all)
-    early_stopping = EarlyStopping(model, **stopping_args)
+    dataloaders      = get_dataloaders(idx_all, labels_all)
+    early_stopping   = EarlyStopping(model, **stopping_args)
     attr_mat_norm_np = normalize_attributes(graph.attr_matrix)
-    attr_mat_norm = matrix_to_torch(attr_mat_norm_np).to(device)
-
+    attr_mat_norm    = matrix_to_torch(attr_mat_norm_np).to(device)
+    
     epoch_stats = {'train': {}, 'stopping': {}}
-
+    
     start_time = time.time()
-    last_time = start_time
-    for epoch in range(early_stopping.max_epochs):
+    last_time  = start_time
+    for epoch in trange(early_stopping.max_epochs):
         for phase in epoch_stats.keys():
 
             if phase == 'train':

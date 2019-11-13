@@ -63,8 +63,9 @@ class EarlyStopping:
                     self.best_epoch = epoch
                     self.remembered_vals = copy.copy(values)
                     self.best_state = {
-                            key: value.cpu() for key, value
-                            in self.model.state_dict().items()}
+                        key: value.cpu() for key, value
+                        in self.model.state_dict().items()
+                    }
             elif self.remember is Best.RANKED:
                 for i, comp in enumerate(comp_remembered):
                     if comp:
