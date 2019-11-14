@@ -25,9 +25,45 @@ _ = torch.cuda.manual_seed(123 + 4)
 from ppnp.data.io import load_dataset
 
 from ppnp.preprocessing import gen_seeds, gen_splits, normalize_attributes
-from ppnp.pytorch.earlystopping import EarlyStopping, stopping_args
+from ppnp.pytorch.earlystopping import EarlyStopping, SimpleEarlyStopping, stopping_args
 
 # --
+# Helpers
+
+class SimpleEarlyStopping:
+    def __init__(self, model, patience=100, max_epochs=10000):
+        
+        self.model        = model
+        self.patience     = patience
+        self.max_patience = patience
+        
+        self.max_epochs = max_epochs
+        
+        self.best_acc   = -np.inf
+        self.best_nloss = -np.inf
+        
+        self.best_epoch       = -1
+        self.best_epoch_score = (-np.inf, -np.inf)
+    
+    def should_stop(self, acc, loss, epoch):
+        nloss = -1 * loss
+        
+        if (acc < self.best_acc) and (nloss < self.best_nloss):
+            self.patience -= 1
+            return self.patience == 0
+        
+        self.patience = self.max_patience
+        
+        self.best_acc   = max(acc, self.best_acc)
+        self.best_nloss = max(nloss, self.best_nloss)
+        
+        if (acc, nloss) > self.best_epoch_score:
+            self.best_epoch       = epoch
+            self.best_epoch_score = (acc, nloss)
+            self.best_state       = {k:v.cpu() for k,v in self.model.state_dict().items()}
+        
+        return False
+
 
 def calc_A_hat(adj, mode):
     A = adj + sp.eye(adj.shape[0])
@@ -143,7 +179,7 @@ for _ in range(num_runs):
     
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
-    early_stopping = EarlyStopping(model, **stopping_args)
+    early_stopping = SimpleEarlyStopping(model)
     
     for epoch in range(early_stopping.max_epochs):
         
@@ -176,8 +212,7 @@ for _ in range(num_runs):
             preds    = logits.argmax(dim=-1)
             stop_acc = (preds == y_stop).float().mean()
         
-        stop_vars = [float(stop_acc), float(stop_loss)]
-        if early_stopping.check(stop_vars, epoch):
+        if early_stopping.should_stop(acc=float(stop_acc), loss=float(stop_loss), epoch=epoch):
             break
     
     _ = model.load_state_dict(early_stopping.best_state)
@@ -189,6 +224,7 @@ for _ in range(num_runs):
     
     print({
         "epochs"     : int(epoch),
+        "best_epoch" : int(early_stopping.best_epoch),
         "train_acc"  : float(train_acc),
         "stop_acc"   : float(stop_acc),
         "valid_acc"  : float(valid_acc),
