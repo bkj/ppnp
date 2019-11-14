@@ -24,13 +24,11 @@ stopping_args = dict(
 
 
 class SimpleEarlyStopping:
-    def __init__(self, model, patience=100, max_epochs=10000):
+    def __init__(self, model, patience=100):
         
         self.model        = model
         self.patience     = patience
         self.max_patience = patience
-        
-        self.max_epochs = max_epochs
         
         self.best_acc   = -np.inf
         self.best_nloss = -np.inf

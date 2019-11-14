@@ -23,21 +23,17 @@ _ = torch.manual_seed(123 + 3)
 _ = torch.cuda.manual_seed(123 + 4)
 
 from ppnp.data.io import load_dataset
-
 from ppnp.preprocessing import gen_seeds, gen_splits, normalize_attributes
-from ppnp.pytorch.earlystopping import EarlyStopping, SimpleEarlyStopping, stopping_args
 
 # --
 # Helpers
 
 class SimpleEarlyStopping:
-    def __init__(self, model, patience=100, max_epochs=10000):
+    def __init__(self, model, patience=100):
         
         self.model        = model
         self.patience     = patience
         self.max_patience = patience
-        
-        self.max_epochs = max_epochs
         
         self.best_acc   = -np.inf
         self.best_nloss = -np.inf
@@ -137,8 +133,8 @@ class PPNP(nn.Module):
 
 num_runs = 5
 
-all_results = []
 for _ in range(num_runs):
+    
     graph_name = 'cora_ml'
     graph      = load_dataset(graph_name)
     graph.standardize(select_lcc=True)
@@ -150,6 +146,7 @@ for _ in range(num_runs):
         'seed'             : 2413340114,
     }
     
+    max_epochs     = 10_000
     reg_lambda     = 5e-3
     learning_rate  = 0.01
     
@@ -181,7 +178,7 @@ for _ in range(num_runs):
     
     early_stopping = SimpleEarlyStopping(model)
     
-    for epoch in range(early_stopping.max_epochs):
+    for epoch in range(max_epochs):
         
         # --
         # Train
