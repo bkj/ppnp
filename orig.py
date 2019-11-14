@@ -7,32 +7,44 @@
 """
 
 import os
+import math
 import random
-import logging
 import numpy as np
+import scipy.sparse as sp
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-# torch.set_default_tensor_type('torch.DoubleTensor')
 torch.backends.cudnn.deterministic = True
 _ = random.seed(123 + 1)
 _ = np.random.seed(123 + 2)
 _ = torch.manual_seed(123 + 3)
 _ = torch.cuda.manual_seed(123 + 4)
 
-from ppnp.pytorch.training import train_model
-from ppnp.pytorch.propagation import PPRExact, PPRPowerIteration
 from ppnp.data.io import load_dataset
 
 from ppnp.preprocessing import gen_seeds, gen_splits, normalize_attributes
 from ppnp.pytorch.earlystopping import EarlyStopping, stopping_args
 
-logging.basicConfig(format='%(asctime)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
-
 # --
-import math
+
+def calc_A_hat(adj, mode):
+    A = adj + sp.eye(adj.shape[0])
+    D = np.sum(A, axis=1).A1
+    if mode == 'sym':
+        D_inv = sp.diags(1 / np.sqrt(D))
+        return D_inv @ A @ D_inv
+    elif mode == 'rw':
+        D_inv = sp.diags(1 / D)
+        return D_inv @ A
+
+def calc_ppr_exact(adj, alpha, mode='sym'):
+    A_hat   = calc_A_hat(adj, mode=mode)
+    A_inner = sp.eye(adj.shape[0]) - (1 - alpha) * A_hat
+    return alpha * np.linalg.inv(A_inner.toarray())
+
+
 class CustomLinear(nn.Module):
     def __init__(self, in_features, out_features, bias=True):
         super().__init__()
@@ -48,7 +60,6 @@ class CustomLinear(nn.Module):
         self.reset_parameters()
     
     def reset_parameters(self):
-        # Our fan_in is interpreted by PyTorch as fan_out (swapped dimensions)
         nn.init.kaiming_uniform_(self.weight, mode='fan_out', a=math.sqrt(5))
         if self.bias is not None:
             _, fan_out = nn.init._calculate_fan_in_and_fan_out(self.weight)
@@ -61,8 +72,9 @@ class CustomLinear(nn.Module):
         else:
             return torch.addmm(self.bias, input, self.weight)
 
+
 class PPNP(nn.Module):
-    def __init__(self, n_features, n_classes, propagation, hidden_dim=64, drop_prob=0.5, bias=False):
+    def __init__(self, n_features, n_classes, ppr, hidden_dim=64, drop_prob=0.5, bias=False):
         
         super().__init__()
         
@@ -74,16 +86,15 @@ class PPNP(nn.Module):
             nn.Linear(hidden_dim, n_classes, bias=bias)
         )
         
+        self.register_buffer('ppr', ppr)
+        
         self._reg_params = list(self.encoder[1].parameters())
-        self.propagation = propagation
     
     def get_norm(self):
         return sum((torch.sum(param ** 2) for param in self._reg_params))
     
     def forward(self, X, idx):
-        E = self.encoder(X)
-        E = self.propagation(E, idx)
-        return E
+        return self.ppr[idx] @ self.encoder(X)
 
 # --
 # Helpers
@@ -109,23 +120,6 @@ for _ in range(num_runs):
     test = True
     
     # --
-    # Orig
-    
-    # result = train_model(
-    #     model_class=PPNP,
-    #     graph=graph,
-    #     model_args=model_args,
-    #     learning_rate=learning_rate,
-    #     reg_lambda=reg_lambda,
-    #     test=True,
-    # )
-    # all_results.append(result)
-    # for r in all_results:
-    #     print(r)
-    
-    # os._exit(0)
-    
-    # --
     #  Define data
     
     X = normalize_attributes(graph.attr_matrix)
@@ -144,8 +138,8 @@ for _ in range(num_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    ppr   = PPRExact(graph.adj_matrix, alpha=0.1)
-    model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, propagation=ppr).cuda()
+    ppr   = torch.FloatTensor(calc_ppr_exact(graph.adj_matrix, alpha=0.1))
+    model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, ppr=ppr).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
@@ -157,29 +151,29 @@ for _ in range(num_runs):
         # Train
         
         _ = model.train()
-        opt.zero_grad()
-        logits = model(X, idx_train)
-        preds  = logits.argmax(dim=-1)
         
+        logits     = model(X, idx_train)
         train_loss = F.cross_entropy(logits, y_train)
         train_loss = train_loss + reg_lambda / 2 * model.get_norm()
         
+        opt.zero_grad()
         train_loss.backward()
         opt.step()
         
+        preds     = logits.argmax(dim=-1)
         train_acc = (preds == y_train).float().mean()
         
         # --
         # Stop
         
         _ = model.eval()
+        
         with torch.no_grad():
-            logits = model(X, idx_stop)
-            preds  = logits.argmax(dim=-1)
-            
+            logits    = model(X, idx_stop)
             stop_loss = F.cross_entropy(logits, y_stop)
             stop_loss = stop_loss + reg_lambda / 2 * model.get_norm()
             
+            preds    = logits.argmax(dim=-1)
             stop_acc = (preds == y_stop).float().mean()
         
         stop_vars = [float(stop_acc), float(stop_loss)]
