@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 """
-    simple.py
+    main.py
+    
+    Use IO + preprocessing + random seeds from https://github.com/klicperajo/ppnp
+    to guarantee reproducibility
 """
 
 import os
@@ -47,8 +50,7 @@ for _ in range(num_runs):
     max_epochs     = 10_000
     reg_lambda     = 5e-3
     learning_rate  = 0.01
-    
-    test = True
+    test           = True
     
     # --
     #  Define data
