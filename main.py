@@ -35,8 +35,8 @@ num_runs = 5
 for _ in range(num_runs):
     
     inpath = 'ppnp/data/cora_ml.npz'
-    with np.load(inpath, allow_pickle=True) as loader:
-        graph = SparseGraph.from_flat_dict(dict(loader))
+    graph = dict(np.load(inpath, allow_pickle=True))
+    graph = SparseGraph.from_flat_dict(graph)
     
     graph.standardize(select_lcc=True)
     
