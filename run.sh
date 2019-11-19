@@ -25,5 +25,12 @@ python main.py
 # --
 # Run w/ custom datasets
 
-wget http://www.cis.jhu.edu/~parky/TT/Data/DS72784/Graphs/DS72784-graphml-raw.zip 
+mkdir -p data
+
+wget http://www.cis.jhu.edu/~parky/TT/Data/DS72784/Graphs/DS72784-graphml-raw.zip \
     -O data/DS72784-graphml-raw.zip
+
+cd data
+unzip DS72784-graphml-raw.zip
+cd ..
+
