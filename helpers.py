@@ -4,6 +4,7 @@
     helpers.py
 """
 
+import sys
 import torch
 import random
 import numpy as np
@@ -16,11 +17,13 @@ def set_seeds(seed):
     _ = torch.cuda.manual_seed(seed + 4)
 
 class SimpleEarlyStopping:
-    def __init__(self, model, patience=100):
+    def __init__(self, model, patience=100, store_weights=False):
         
-        self.model        = model
-        self.patience     = patience
-        self.max_patience = patience
+        self.model         = model
+        self.patience      = patience
+        self.max_patience  = patience
+        self.store_weights = store_weights
+        self.record        = None,
         
         self.best_acc   = -np.inf
         self.best_nloss = -np.inf
@@ -28,7 +31,7 @@ class SimpleEarlyStopping:
         self.best_epoch       = -1
         self.best_epoch_score = (-np.inf, -np.inf)
     
-    def should_stop(self, acc, loss, epoch):
+    def should_stop(self, acc, loss, epoch, record=None):
         nloss = -1 * loss
         
         if (acc < self.best_acc) and (nloss < self.best_nloss):
@@ -43,7 +46,11 @@ class SimpleEarlyStopping:
         if (acc, nloss) > self.best_epoch_score:
             self.best_epoch       = epoch
             self.best_epoch_score = (acc, nloss)
-            self.best_state       = {k:v.cpu() for k,v in self.model.state_dict().items()}
+            if self.store_weights:
+                self.best_state = {k:v.cpu() for k,v in self.model.state_dict().items()}
+            
+            if record:
+                self.record = record
         
         return False
 

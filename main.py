@@ -8,9 +8,13 @@
 """
 
 import os
+import sys
 import math
+import json
 import random
+import argparse
 import numpy as np
+from time import time
 import scipy.sparse as sp
 
 import torch
@@ -25,32 +29,41 @@ from ppnp.preprocessing import gen_seeds, gen_splits, normalize_attributes
 from model import PPNP
 from helpers import set_seeds, compute_ppr, SimpleEarlyStopping
 
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--inpath', type=str, default='ppnp/data/ms_academic.npz')
+    parser.add_argument('--n-runs', type=int, default=5)
+    # parser.add_argument('--outpath', type=str)
+    parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--verbose', action="store_true")
+    return parser.parse_args()
+
+args = parse_args()
+
 # --
-# Train
+# Run
 
-set_seeds(123)
+set_seeds(args.seed)
 
-num_runs = 5
-
-for _ in range(num_runs):
+for _ in range(args.n_runs):
     
-    inpath = 'ppnp/data/cora_ml.npz'
-    with np.load(inpath, allow_pickle=True) as loader:
-        graph = SparseGraph.from_flat_dict(dict(loader))
-    
+    graph = np.load(args.inpath, allow_pickle=True)
+    graph = SparseGraph.from_flat_dict(dict(graph))
     graph.standardize(select_lcc=True)
     
     idx_split_args = {
         'ntrain_per_class' : 20,
         'nstopping'        : 500,
-        'nknown'           : 1500,
+        'nknown'           : 1500 if 'ms_academic' not in args.inpath else 5000,
         'seed'             : 2413340114,
     }
     
     max_epochs     = 10_000
     reg_lambda     = 5e-3
     learning_rate  = 0.01
-    test           = True
+    alpha          = 0.1
+    test           = False
     
     # --
     #  Define data
@@ -71,13 +84,18 @@ for _ in range(num_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=0.1))
+    print('main: compute_ppr', file=sys.stderr)
+    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=alpha))
+    
+    print('main: init model', file=sys.stderr)
     model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, ppr=ppr).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
     early_stopping = SimpleEarlyStopping(model)
     
+    print('main: start training', file=sys.stderr)
+    t = time()
     for epoch in range(max_epochs):
         
         # --
@@ -108,21 +126,37 @@ for _ in range(num_runs):
             
             preds    = logits.argmax(dim=-1)
             stop_acc = (preds == y_stop).float().mean()
+            
+            valid_acc = (model(X, idx_valid).argmax(dim=-1) == y_valid).float().mean() # !! Naughty
         
-        if early_stopping.should_stop(acc=float(stop_acc), loss=float(stop_loss), epoch=epoch):
+        record = {
+            "epoch"     : int(epoch),
+            "elapsed"   : float(time() - t),
+            "train_acc" : float(train_acc),
+            "stop_acc"  : float(stop_acc),
+            "valid_acc" : float(valid_acc),
+        }
+        
+        if args.verbose:
+            print(json.dumps(record))
+            sys.stdout.flush()
+        
+        if early_stopping.should_stop(acc=float(stop_acc), loss=float(stop_loss), epoch=epoch, record=record):
             break
     
-    _ = model.load_state_dict(early_stopping.best_state)
-    _ = model.eval()
+    # _ = model.load_state_dict(early_stopping.best_state)
+    # _ = model.eval()
     
-    train_acc = (model(X, idx_train).argmax(dim=-1) == y_train).float().mean()
-    stop_acc  = (model(X, idx_stop).argmax(dim=-1) == y_stop).float().mean()
-    valid_acc = (model(X, idx_valid).argmax(dim=-1) == y_valid).float().mean()
+    # train_acc = (model(X, idx_train).argmax(dim=-1) == y_train).float().mean()
+    # stop_acc  = (model(X, idx_stop).argmax(dim=-1) == y_stop).float().mean()
+    # valid_acc = (model(X, idx_valid).argmax(dim=-1) == y_valid).float().mean()
+    
+    record = early_stopping.record
     
     print({
         "epochs"     : int(epoch),
-        "best_epoch" : int(early_stopping.best_epoch),
-        "train_acc"  : float(train_acc),
-        "stop_acc"   : float(stop_acc),
-        "valid_acc"  : float(valid_acc),
+        "best_epoch" : int(record['best_epoch']),
+        "train_acc"  : float(record['train_acc']),
+        "stop_acc"   : float(record['stop_acc']),
+        "valid_acc"  : float(record['valid_acc']),
     })
