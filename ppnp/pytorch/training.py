@@ -100,7 +100,11 @@ def train_model(
             if early_stopping.check(stop_vars, epoch):
                 break
     
-    model.load_state_dict(early_stopping.best_state)
+    best_state = early_stopping.best_state
+    if 'propagation.A_hat' in best_state:
+        del best_state['propagation.A_hat']
+    
+    model.load_state_dict(best_state, strict=False)
     
     stopping_preds = get_predictions(model, attr_mat_norm, idx_all['stopping'])
     valtest_preds  = get_predictions(model, attr_mat_norm, idx_all['valtest'])
@@ -109,6 +113,7 @@ def train_model(
     valtest_acc  = (valtest_preds == labels_np[idx_all['valtest']]).mean()
     
     return {
+        "best_epoch"   : int(best_state['best_epoch']),
         "stopping_acc" : float(stopping_acc),
         "valtest_acc"  : float(valtest_acc),
         "test"         : test

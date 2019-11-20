@@ -105,7 +105,7 @@ num_runs = 5
 
 all_results = []
 for _ in range(num_runs):
-    graph_name = 'cora_ml'
+    graph_name = 'citeseer'
     graph      = load_dataset(graph_name)
     graph.standardize(select_lcc=True)
     
