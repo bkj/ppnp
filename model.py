@@ -58,6 +58,10 @@ class PPNP(nn.Module):
     def get_norm(self):
         return sum((torch.sum(param ** 2) for param in self._reg_params))
     
-    def forward(self, X, idx):
-        return self.ppr[idx] @ self.encoder(X)
-
+    def forward(self, X, idx=None, ppr=None):
+        if idx is not None:
+            return self.ppr[idx] @ self.encoder(X)
+        elif ppr is not None:
+            return ppr @ self.encoder(X)
+        else:
+            raise Exception()

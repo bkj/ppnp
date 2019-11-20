@@ -21,6 +21,7 @@ import scipy.sparse as sp
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.data import DataLoader, TensorDataset
 
 torch.backends.cudnn.deterministic = True
 
@@ -36,10 +37,12 @@ def gen_seeds():
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath', type=str, default='ppnp/data/ms_academic.npz')
-    parser.add_argument('--n-runs', type=int, default=5)
-    parser.add_argument('--seed',   type=int, default=123)
-    parser.add_argument('--verbose', action="store_true")
+    parser.add_argument('--inpath',     type=str, default='ppnp/data/ms_academic.npz')
+    parser.add_argument('--n-runs',     type=int, default=5)
+    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--ppr-topk',   type=int, default=128)
+    parser.add_argument('--seed',       type=int, default=123)
+    parser.add_argument('--verbose',    action="store_true")
     return parser.parse_args()
 
 args = parse_args()
@@ -93,12 +96,21 @@ for _ in range(args.n_runs):
     
     y_train, y_stop, y_valid = y[idx_train], y[idx_stop], y[idx_valid]
     
+    train_loader = DataLoader(TensorDataset(idx_train, y_train), batch_size=args.batch_size, shuffle=True, num_workers=0)
+    
     idx_train, idx_stop, idx_valid = map(lambda x: x.cuda(), (idx_train, idx_stop, idx_valid))
     y_train, y_stop, y_valid       = map(lambda x: x.cuda(), (y_train, y_stop, y_valid))
     
     torch.manual_seed(seed=gen_seeds())
     
-    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=alpha))
+    ppr = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=alpha))
+    
+    # >>
+    # Sparsify PPR matrix
+    thresh, _ = ppr.topk(args.ppr_topk, axis=-1)
+    ppr[ppr < thresh[:,-1]] = 0
+    # <<
+    
     model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, ppr=ppr).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -113,16 +125,27 @@ for _ in range(args.n_runs):
         
         _ = model.train()
         
-        logits     = model(X, idx_train)
-        train_loss = F.cross_entropy(logits, y_train)
-        train_loss = train_loss + reg_lambda / 2 * model.get_norm()
-        
-        opt.zero_grad()
-        train_loss.backward()
-        opt.step()
-        
-        preds     = logits.argmax(dim=-1)
-        train_acc = (preds == y_train).float().mean()
+        train_loss = 0
+        for idx_batch, y_batch in train_loader:
+            
+            # !! This assums PPR is dense for now, but could be changed
+            #    If we expand support to sparse matrices, write a little wrapper that
+            #    does the same thing.  OR embed it in the model class
+            ppr_sub = model.ppr[idx_batch]
+            sel     = (ppr_sub > 0).any(dim=0)
+            ppr_sub = ppr_sub[:,sel]
+            
+            X_batch, y_batch = X[sel].cuda(), y_batch.cuda()
+            
+            logits = model(X_batch, idx=None, ppr=ppr_sub)
+            loss   = F.cross_entropy(logits, y_batch)
+            loss   = loss + reg_lambda / 2 * model.get_norm()
+            
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            
+            train_loss += loss
         
         # --
         # Stop
@@ -142,7 +165,6 @@ for _ in range(args.n_runs):
         record = {
             "epoch"     : int(epoch),
             "elapsed"   : float(time() - t),
-            "train_acc" : float(train_acc),
             "stop_acc"  : float(stop_acc),
             "valid_acc" : float(valid_acc),
         }
@@ -153,6 +175,11 @@ for _ in range(args.n_runs):
         
         if early_stopping.should_stop(acc=float(stop_acc), loss=float(stop_loss), epoch=epoch, record=record):
             break
+        
+        if epoch > 500:
+            break
+    
+    print('epoch per second', epoch / (time() - t))
     
     record = early_stopping.record
     

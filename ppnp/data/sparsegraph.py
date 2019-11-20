@@ -390,6 +390,6 @@ def remove_self_loops(sparse_graph: SparseGraph) -> SparseGraph:
         sparse_graph.adj_matrix = sparse_graph.adj_matrix.tolil()
         sparse_graph.adj_matrix.setdiag(0)
         sparse_graph.adj_matrix = sparse_graph.adj_matrix.tocsr()
-        warnings.warn("{0} self loops removed".format(num_self_loops))
+        # warnings.warn("{0} self loops removed".format(num_self_loops))
 
     return sparse_graph

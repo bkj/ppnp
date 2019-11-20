@@ -5,11 +5,6 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
 
-def gen_seeds(size: int = None) -> np.ndarray:
-    max_uint32 = np.iinfo(np.uint32).max
-    return np.random.randint(
-            max_uint32 + 1, size=size, dtype=np.uint32)
-
 
 def exclude_idx(idx: np.ndarray, idx_exclude_list: List[np.ndarray]) -> np.ndarray:
     idx_exclude = np.concatenate(idx_exclude_list)

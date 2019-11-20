@@ -13,12 +13,22 @@ conda install -y scipy=1.3.1
 
 # --
 # Run
+# !! Mean scores below match paper.  std's may be slightly different.
 
-python main.py --inpath ppnp/data/cora_ml.npz
-# {'epochs': 1986, 'best_epoch': 1258, 'train_acc': 1.0, 'stop_acc': 0.8460000157356262, 'valid_acc': 0.8511450290679932}
-# {'epochs': 1953, 'best_epoch': 1750, 'train_acc': 1.0, 'stop_acc': 0.8480000495910645, 'valid_acc': 0.8541984558105469}
-# {'epochs': 2316, 'best_epoch': 2092, 'train_acc': 0.99, 'stop_acc': 0.8460000157356262, 'valid_acc': 0.8442748188972473}
-# {'epochs': 1664, 'best_epoch': 1382, 'train_acc': 1.0, 'stop_acc': 0.8460000157356262, 'valid_acc': 0.8587786555290222}
-# {'epochs': 1563, 'best_epoch': 1463, 'train_acc': 1.0, 'stop_acc': 0.8440000414848328, 'valid_acc': 0.8534350991249084}
+python main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
+# valid_acc = 0.856 (std=0.009)
 
-python main.py --inpath ppnp/data/citeseer.npz
+python main.py --inpath ppnp/data/citeseer.npz --n-runs 32
+# valid_acc = 0.760 (std=0.012)
+
+python main.py --inpath ppnp/data/pubmed.npz --n-runs 10
+# valid_acc = 0.812 (std=0.007)
+
+python main.py --inpath ppnp/data/ms_academic.npz --n-runs 10 --verbose | tee res.jl
+# valid_acc = 0.932221 (std=0.003)
+
+# --
+# Test batch-main.py
+
+python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 32 --ppr-topk 128
+python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 1024 --ppr-topk 256
