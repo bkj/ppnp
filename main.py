@@ -34,8 +34,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inpath', type=str, default='ppnp/data/ms_academic.npz')
     parser.add_argument('--n-runs', type=int, default=5)
-    # parser.add_argument('--outpath', type=str)
-    parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--seed',   type=int, default=123)
     parser.add_argument('--verbose', action="store_true")
     return parser.parse_args()
 
@@ -46,6 +45,8 @@ args = parse_args()
 
 set_seeds(args.seed)
 
+is_ms_academic = 'ms_academic' in args.inpath
+
 for _ in range(args.n_runs):
     
     graph = np.load(args.inpath, allow_pickle=True)
@@ -55,7 +56,7 @@ for _ in range(args.n_runs):
     idx_split_args = {
         'ntrain_per_class' : 20,
         'nstopping'        : 500,
-        'nknown'           : 1500 if 'ms_academic' not in args.inpath else 5000,
+        'nknown'           : 1500,
         'seed'             : 2413340114,
     }
     
@@ -63,7 +64,11 @@ for _ in range(args.n_runs):
     reg_lambda     = 5e-3
     learning_rate  = 0.01
     alpha          = 0.1
-    test           = False
+    test           = True
+    
+    # if is_ms_academic:
+    #     alpha = 0.2
+    #     idx_split_args['nknown'] = 5000
     
     # --
     #  Define data
@@ -84,17 +89,14 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    print('main: compute_ppr', file=sys.stderr)
-    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=alpha))
+    ppr = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=alpha))
     
-    print('main: init model', file=sys.stderr)
     model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, ppr=ppr).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
     early_stopping = SimpleEarlyStopping(model)
     
-    print('main: start training', file=sys.stderr)
     t = time()
     for epoch in range(max_epochs):
         
@@ -144,18 +146,11 @@ for _ in range(args.n_runs):
         if early_stopping.should_stop(acc=float(stop_acc), loss=float(stop_loss), epoch=epoch, record=record):
             break
     
-    # _ = model.load_state_dict(early_stopping.best_state)
-    # _ = model.eval()
-    
-    # train_acc = (model(X, idx_train).argmax(dim=-1) == y_train).float().mean()
-    # stop_acc  = (model(X, idx_stop).argmax(dim=-1) == y_stop).float().mean()
-    # valid_acc = (model(X, idx_valid).argmax(dim=-1) == y_valid).float().mean()
-    
     record = early_stopping.record
     
     print({
         "epochs"     : int(epoch),
-        "best_epoch" : int(record['best_epoch']),
+        "best_epoch" : int(record['epoch']),
         "train_acc"  : float(record['train_acc']),
         "stop_acc"   : float(record['stop_acc']),
         "valid_acc"  : float(record['valid_acc']),
