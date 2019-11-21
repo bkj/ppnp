@@ -120,7 +120,7 @@ for _ in range(args.n_runs):
         
         enc, denc  = model(X, idx_train)
         
-        train_loss = ((enc - denc) ** 2).mean()
+        train_loss = (enc * denc).sum(axis=-1).mean()
         train_loss = train_loss + args.reg_lambda / 2 * model.get_norm()
         
         opt.zero_grad()
@@ -134,7 +134,7 @@ for _ in range(args.n_runs):
         
         with torch.no_grad():
             enc, denc = model(X, idx_stop)
-            stop_loss = ((enc - denc) ** 2).mean()
+            stop_loss = (enc * denc).sum(axis=-1).mean()
             stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
         
         record = {

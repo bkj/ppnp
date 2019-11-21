@@ -78,5 +78,5 @@ class UnsupervisedPPNP(nn.Module):
     
     def forward(self, X, idx):
         enc = self.emb.weight
-        enc = F.normalize(enc, dim=-1)
+        enc = F.normalize(enc, dim=-1)       # Prevent from going to zero
         return enc[idx], self.ppr[idx] @ enc
