@@ -10,6 +10,7 @@ conda activate ppnp_env
 
 conda install -y -c pytorch pytorch=1.2.0
 conda install -y scipy=1.3.1
+conda install -y pandas
 
 # --
 # Run

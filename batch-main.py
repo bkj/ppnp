@@ -131,6 +131,7 @@ for _ in range(args.n_runs):
             # !! This assums PPR is dense for now, but could be changed
             #    If we expand support to sparse matrices, write a little wrapper that
             #    does the same thing.  OR embed it in the model class
+            # !! Depending on dataset size, this loader may look a little different
             ppr_sub = model.ppr[idx_batch]
             sel     = (ppr_sub > 0).any(dim=0)
             ppr_sub = ppr_sub[:,sel]

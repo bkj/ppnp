@@ -36,7 +36,7 @@ def gen_seeds():
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath', type=str, default='ppnp/data/ms_academic.npz')
+    parser.add_argument('--inpath', type=str, default='ppnp/data/cora_ml.npz')
     parser.add_argument('--n-runs', type=int, default=5)
     parser.add_argument('--seed',   type=int, default=123)
     parser.add_argument('--verbose', action="store_true")
@@ -59,9 +59,9 @@ for _ in range(args.n_runs):
     graph.standardize(select_lcc=True)
     
     idx_split_args = {
-        'ntrain_per_class' : 20,
+        'ntrain_per_class' : 4 * 2,        # What is the score on the official split?
         'nstopping'        : 500,
-        'nknown'           : 1500,
+        'nknown'           : 1500,         # What does this mean when test is true?
         # >>
         # 'seed'             : 2413340114,
         'seed'             : gen_seeds(),  # Variance is too small if we don't do this
