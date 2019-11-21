@@ -40,7 +40,6 @@ class CustomLinear(nn.Module):
 
 class PPNP(nn.Module):
     def __init__(self, n_features, n_classes, ppr, hidden_dim=64, drop_prob=0.5, bias=False):
-        
         super().__init__()
         
         self.encoder = nn.Sequential(
@@ -65,3 +64,19 @@ class PPNP(nn.Module):
             return ppr @ self.encoder(X)
         else:
             raise Exception()
+
+
+class UnsupervisedPPNP(nn.Module):
+    def __init__(self, ppr):
+        super().__init__()
+        
+        self.emb = nn.Embedding(ppr.shape[0], 128)
+        self.register_buffer('ppr', ppr)
+    
+    def get_norm(self):
+        return 0
+    
+    def forward(self, X, idx):
+        enc = self.emb.weight
+        enc = F.normalize(enc, dim=-1)
+        return enc[idx], self.ppr[idx] @ enc

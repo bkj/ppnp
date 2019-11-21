@@ -31,5 +31,5 @@ python main.py --inpath ppnp/data/ms_academic.npz --n-runs 10 --verbose | tee re
 # --
 # Test batch-main.py
 
-python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 32 --ppr-topk 128
+python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 1 --verbose --batch-size 32 --ppr-topk 128
 python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 1024 --ppr-topk 256
