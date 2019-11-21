@@ -93,6 +93,7 @@ class UnsupervisedPPNP(nn.Module):
                 ppr_sub  = ppr_sub[:,sel]
                 diff_enc = ppr_sub @ enc[sel]
         else:
+            raise Exception()
             indices  = self.topk_indices[idx]
             values   = self.topk_values[idx]
             
