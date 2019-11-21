@@ -33,3 +33,14 @@ python main.py --inpath ppnp/data/ms_academic.npz --n-runs 10 --verbose | tee re
 
 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 1 --verbose --batch-size 32 --ppr-topk 128
 python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 1024 --ppr-topk 256
+
+
+# --
+# Node embedding experiments
+
+python unsupervised-main.py
+
+python batch-unsupervised-main.py
+python batch-unsupervised-main.py --sparse
+
+# !! Truncating PPR helps (on cora_ml)
