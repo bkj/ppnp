@@ -39,17 +39,33 @@ def parse_args():
     parser.add_argument('--inpath', type=str, default='ppnp/data/cora_ml.npz')
     parser.add_argument('--n-runs', type=int, default=5)
     parser.add_argument('--seed',   type=int, default=123)
+    
+    parser.add_argument('--ntrain-per-class', type=int,   default=20)
+    parser.add_argument('--nstopping',        type=int,   default=500)
+    parser.add_argument('--nknown',           type=int,   default=1500)
+    parser.add_argument('--max-epochs',       type=int,   default=10_000)
+    parser.add_argument('--reg-lambda',       type=float, default=5e-3)
+    parser.add_argument('--lr',               type=float, default=0.01)
+    parser.add_argument('--alpha',            type=float, default=0.1)
+    parser.add_argument('--test',             action="store_true")
+    
     parser.add_argument('--verbose', action="store_true")
-    return parser.parse_args()
+    
+    args = parser.parse_args()
+    
+    is_ms_academic = 'ms_academic' in args.inpath
+    if is_ms_academic:
+        args.alpha  = 0.2
+        args.nknown = 5000
+    
+    return args
 
 args = parse_args()
+set_seeds(args.seed)
 
 # --
 # Run
 
-set_seeds(args.seed)
-
-is_ms_academic = 'ms_academic' in args.inpath
 
 all_records = []
 for _ in range(args.n_runs):
@@ -59,25 +75,14 @@ for _ in range(args.n_runs):
     graph.standardize(select_lcc=True)
     
     idx_split_args = {
-        'ntrain_per_class' : 4 * 2,        # What is the score on the official split?
-        'nstopping'        : 500,
-        'nknown'           : 1500,         # What does this mean when test is true?
+        'ntrain_per_class' : args.ntrain_per_class, # What is the score on the official split?
+        'nstopping'        : args.nstopping,
+        'nknown'           : args.nknown,            # What does this mean when test is true?
         # >>
         # 'seed'             : 2413340114,
-        'seed'             : gen_seeds(),  # Variance is too small if we don't do this
+        'seed'             : gen_seeds(),            # Variance is too small if we don't do this
         # <<
     }
-    
-    max_epochs     = 10_000
-    reg_lambda     = 5e-3
-    learning_rate  = 0.01
-    alpha          = 0.1
-    test           = True
-    
-    if is_ms_academic:
-        print('is_ms_academic', file=sys.stderr)
-        alpha                    = 0.2
-        idx_split_args['nknown'] = 5000
     
     # --
     #  Define data
@@ -88,7 +93,7 @@ for _ in range(args.n_runs):
     
     y = torch.LongTensor(graph.labels)
     
-    idx_train, idx_stop, idx_valid = gen_splits(graph.labels, idx_split_args, test=test)
+    idx_train, idx_stop, idx_valid = gen_splits(graph.labels, idx_split_args, test=args.test)
     idx_train, idx_stop, idx_valid = map(torch.LongTensor, (idx_train, idx_stop, idx_valid))
     
     y_train, y_stop, y_valid = y[idx_train], y[idx_stop], y[idx_valid]
@@ -98,15 +103,15 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=alpha))
+    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=args.alpha))
     model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, ppr=ppr).cuda()
     
-    opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     
     early_stopping = SimpleEarlyStopping(model)
     
     t = time()
-    for epoch in range(max_epochs):
+    for epoch in range(args.max_epochs):
         
         # --
         # Train
@@ -115,7 +120,7 @@ for _ in range(args.n_runs):
         
         logits     = model(X, idx_train)
         train_loss = F.cross_entropy(logits, y_train)
-        train_loss = train_loss + reg_lambda / 2 * model.get_norm()
+        train_loss = train_loss + args.reg_lambda / 2 * model.get_norm()
         
         opt.zero_grad()
         train_loss.backward()
@@ -132,7 +137,7 @@ for _ in range(args.n_runs):
         with torch.no_grad():
             logits    = model(X, idx_stop)
             stop_loss = F.cross_entropy(logits, y_stop)
-            stop_loss = stop_loss + reg_lambda / 2 * model.get_norm()
+            stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
             
             preds    = logits.argmax(dim=-1)
             stop_acc = (preds == y_stop).float().mean()
