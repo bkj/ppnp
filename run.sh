@@ -11,6 +11,7 @@ conda activate ppnp_env
 conda install -y -c pytorch pytorch=1.2.0
 conda install -y scipy=1.3.1
 conda install -y pandas
+conda install -y numba
 
 # --
 # Run
@@ -44,3 +45,11 @@ CUDA_VISIBLE_DEVICES=6 python batch-unsupervised-main.py --n-runs 32
 CUDA_VISIBLE_DEVICES=6 python batch-unsupervised-main.py --n-runs 32 --sparse
 
 # !! Truncating PPR helps (on cora_ml)
+
+
+CUDA_VISIBLE_DEVICES=6 python batch-unsupervised-main.py --n-runs 1
+
+# --
+# Scaling experiments
+
+CUDA_VISIBLE_DEVICES=6python scale.py

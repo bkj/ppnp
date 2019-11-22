@@ -28,7 +28,8 @@ from ppnp.data.sparsegraph import SparseGraph
 from ppnp.preprocessing import gen_splits, normalize_attributes
 
 from model import UnsupervisedPPNP
-from helpers import set_seeds, compute_ppr, SimpleEarlyStopping
+from helpers import set_seeds, SimpleEarlyStopping
+from ppr import compute_ppr, parallel_pr_nibble
 
 def gen_seeds():
     max_uint32 = np.iinfo(np.uint32).max

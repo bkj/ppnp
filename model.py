@@ -38,8 +38,19 @@ class CustomLinear(nn.Module):
             return torch.addmm(self.bias, input, self.weight)
 
 
+def _dense_diffusion(X, ppr, idx):
+    return ppr[idx] @ X
+
+
+
+def _sparse_diffusion(X, ppr_values, ppr_indices, idx):
+    indices  = ppr_indices[idx]
+    values   = ppr_values[idx]
+    return (X[indices] * values.unsqueeze(-1)).sum(axis=1) # ?? Best way?  Einsum? More memory efficient way?
+
+
 class PPNP(nn.Module):
-    def __init__(self, n_features, n_classes, ppr, hidden_dim=64, drop_prob=0.5, bias=False):
+    def __init__(self, n_features, n_classes, ppr, batched=False, hidden_dim=64, drop_prob=0.5, bias=False):
         super().__init__()
         
         self.encoder = nn.Sequential(
@@ -53,69 +64,49 @@ class PPNP(nn.Module):
         self.register_buffer('ppr', ppr)
         
         self._reg_params = list(self.encoder[1].parameters())
+        
+        self.batched = batched
     
     def get_norm(self):
         return sum((torch.sum(param ** 2) for param in self._reg_params))
     
-    def forward(self, X, idx=None, ppr=None):
-        if idx is not None:
-            return self.ppr[idx] @ self.encoder(X)
-        elif ppr is not None:
-            return ppr @ self.encoder(X)
+    def forward(self, X, idx):
+        enc = self.encoder(X)
+        if self.batched:
+            return _batched_dense_diffuction(end, self.ppr, idx)
         else:
-            raise Exception()
+            return _dense_diffusion(enc, self.ppr, idx)
 
 
-class UnsupervisedPPNP(nn.Module):
-    def __init__(self, ppr, ppr_topk=None):
+class DenseEmbPPNP(nn.Module):
+    def __init__(self, ppr):
         super().__init__()
         
         self.emb = nn.Embedding(ppr.shape[0], 128)
         self.register_buffer('ppr', ppr)
-        
-        if ppr_topk is not None:
-            ppr_topk = ppr.topk(ppr_topk, dim=-1)
-            self.register_buffer('ppr_values', ppr_topk.values)
-            self.register_buffer('ppr_indices', ppr_topk.indices)
     
     def get_norm(self):
         return 0
     
-    def forward(self, idx=None, batched=False, sparse=False):
-        enc = F.normalize(self.emb.weight, dim=-1) # Prevent from degenerate
-        
-        if not sparse:
-            if not batched:
-                diff_enc = self.ppr[idx] @ enc
-            else:
-                ppr_sub  = self.ppr[idx]
-                sel      = (ppr_sub > 0).any(dim=0)
-                ppr_sub  = ppr_sub[:,sel]
-                diff_enc = ppr_sub @ enc[sel]
-        else:
-            indices  = self.ppr_indices[idx]
-            values   = self.ppr_values[idx]
-            diff_enc = (enc[indices] * values.unsqueeze(-1)).sum(axis=1) # ?? Best way?  Einsum? More memory efficient way?
-        
-        return enc[idx], diff_enc
+    def forward(self, idx):
+        enc = F.normalize(self.emb.weight, dim=-1)
+        return enc[idx], _dense_diffusion(enc, self.ppr, idx)
 
 
-class SparseUnsupervisedPPNP(nn.Module):
-    def __init__(self, n_nodes, ppr_values, ppr_indices):
+class SparseEmbPPNP(nn.Module):
+    def __init__(self, n_nodes, ppr_dict):
         super().__init__()
         
         self.emb = nn.Embedding(n_nodes, 128)
-        self.register_buffer('ppr_values', ppr_values)
-        self.register_buffer('ppr_indices', ppr_indices)
+        self.register_buffer('ppr_values', ppr['values'])
+        self.register_buffer('ppr_indices', ppr['indices'])
     
     def get_norm(self):
         return 0
     
-    def forward(self, idx=None, batched=False, sparse=False):
-        enc = F.normalize(self.emb.weight, dim=-1) # Prevent from degenerate
-        
-        indices  = self.ppr_indices[idx]
-        values   = self.ppr_values[idx]
-        diff_enc = (enc[indices] * values.unsqueeze(-1)).sum(axis=1) # ?? Best way?  Einsum? More memory efficient way?
-        return enc[idx], diff_enc
+    def forward(self, idx):
+        enc = F.normalize(self.emb.weight, dim=-1)
+        return enc[idx], _sparse_diffusion(enc, self.ppr_values, self.ppr_indices, idx)
+
+
 

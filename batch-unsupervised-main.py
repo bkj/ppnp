@@ -28,8 +28,9 @@ torch.backends.cudnn.deterministic = True
 from ppnp.data.sparsegraph import SparseGraph
 from ppnp.preprocessing import gen_splits, normalize_attributes
 
-from model import UnsupervisedPPNP
-from helpers import set_seeds, compute_ppr, SimpleEarlyStopping
+from model import UnsupervisedPPNP, SparseUnsupervisedPPNP
+from helpers import set_seeds, SimpleEarlyStopping
+from ppr import exact_ppr, parallel_pr_nibble
 
 def gen_seeds():
     max_uint32 = np.iinfo(np.uint32).max
@@ -48,10 +49,10 @@ def parse_args():
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
     parser.add_argument('--test',             action="store_true")
-
+    
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--ppr-topk',   type=int, default=128)
-
+    
     parser.add_argument('--seed',   type=int, default=123)
     parser.add_argument('--verbose', action="store_true")
     parser.add_argument('--sparse', action="store_true")
@@ -109,10 +110,17 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    ppr = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=args.alpha))
-    
+    # >>
+    # ppr = torch.FloatTensor(exact_ppr(graph.adj_matrix, alpha=args.alpha))
+    # --
+    n_nodes = graph.adj_matrix.shape[0]
+    seeds   = np.arange(n_nodes)
+    ppr     = parallel_pr_nibble(seeds=seeds, adj=sp.eye(n_nodes) + graph.adj_matrix, alpha=args.alpha)
+    ppr     = torch.FloatTensor(ppr)
+    # <<
     
     if not args.sparse:
+        raise Exception()
         # Sparsify PPR matrix
         thresh, _         = ppr.topk(args.ppr_topk, axis=-1)
         thresh            = thresh[:,-1].view(-1, 1)         # Weirdly, truncating _columns_ may perform better?  Need to test

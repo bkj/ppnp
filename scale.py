@@ -102,7 +102,21 @@ n_nodes      = adj.shape[0]
 idx_train    = torch.arange(n_nodes).long()
 train_loader = DataLoader(TensorDataset(idx_train), batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-ppr_values, ppr_indices = compute_sparse_ppr(graph.adj_matrix, alpha=args.alpha)
+seeds = idx_train[:256].numpy()
+
+tmp = adj[:256,:256].copy()
+tmp = tmp + sparse.eye(256).tocsr()
+
+# p = np.random.permutation(tmp.shape[0])
+# tmp = tmp[p]
+# tmp = tmp[:,p]
+
+ppr_values, ppr_indices = parallel_pr_nibble(
+    seeds=seeds, adj=tmp, alpha=args.alpha, epsilon=1e-16)
+
+b = exact_ppr(tmp, alpha=args.alpha, mode='rw')
+V, I = torch.FloatTensor(b).topk(128, dim=-1)
+
 model = SparseUnsupervisedPPNP(n_nodes=n_nodes, ppr_values=ppr_values, ppr_indices=ppr_indices).cuda()
 
 
@@ -115,81 +129,81 @@ model = SparseUnsupervisedPPNP(n_nodes=n_nodes, ppr_values=ppr_values, ppr_indic
 
 
 
-opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+# opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-t = time()
-for epoch in range(args.max_epochs):
+# t = time()
+# for epoch in range(args.max_epochs):
     
-    # --
-    # Train
+#     # --
+#     # Train
     
-    _ = model.train()
+#     _ = model.train()
     
-    train_loss = 0
-    for idx_batch, y_batch in train_loader:
-        a, b = model(idx=idx_batch)
-        loss = ((a - b) ** 2).mean()
-        loss = loss + args.reg_lambda / 2 * model.get_norm()
+#     train_loss = 0
+#     for idx_batch, y_batch in train_loader:
+#         a, b = model(idx=idx_batch)
+#         loss = ((a - b) ** 2).mean()
+#         loss = loss + args.reg_lambda / 2 * model.get_norm()
         
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+#         opt.zero_grad()
+#         loss.backward()
+#         opt.step()
         
-        train_loss += loss
+#         train_loss += loss
     
-    # --
-    # Stop
+#     # --
+#     # Stop
     
-    _ = model.eval()
+#     _ = model.eval()
     
-    with torch.no_grad():
-        a, b   = model(idx=idx_stop, batched=True, sparse=args.sparse)
-        stop_loss = ((a - b) ** 2).mean()
-        stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
+#     with torch.no_grad():
+#         a, b   = model(idx=idx_stop, batched=True, sparse=args.sparse)
+#         stop_loss = ((a - b) ** 2).mean()
+#         stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
     
-    record = {
-        "epoch"      : int(epoch),
-        "elapsed"    : float(time() - t),
-        "train_loss" : float(train_loss),
-        "stop_loss"  : float(stop_loss),
-    }
+#     record = {
+#         "epoch"      : int(epoch),
+#         "elapsed"    : float(time() - t),
+#         "train_loss" : float(train_loss),
+#         "stop_loss"  : float(stop_loss),
+#     }
     
-    if args.verbose:
-        print(json.dumps(record), file=sys.stderr)
-        sys.stderr.flush()
+#     if args.verbose:
+#         print(json.dumps(record), file=sys.stderr)
+#         sys.stderr.flush()
     
-    if early_stopping.should_stop(acc=float(-stop_loss), loss=float(stop_loss), epoch=epoch, record=record):
-        break
+#     if early_stopping.should_stop(acc=float(-stop_loss), loss=float(stop_loss), epoch=epoch, record=record):
+#         break
 
-record = early_stopping.record
+# record = early_stopping.record
 
-# >>
-from sklearn.svm import LinearSVC
+# # >>
+# from sklearn.svm import LinearSVC
 
-enc_train, denc_train = model(idx=idx_train)
-enc_valid, denc_valid = model(idx=idx_valid)
+# enc_train, denc_train = model(idx=idx_train)
+# enc_valid, denc_valid = model(idx=idx_valid)
 
-enc_train, denc_train = enc_train.detach().cpu().numpy(), denc_train.detach().cpu().numpy()
-enc_valid, denc_valid = enc_valid.detach().cpu().numpy(), denc_valid.detach().cpu().numpy()
+# enc_train, denc_train = enc_train.detach().cpu().numpy(), denc_train.detach().cpu().numpy()
+# enc_valid, denc_valid = enc_valid.detach().cpu().numpy(), denc_valid.detach().cpu().numpy()
 
-model = LinearSVC().fit(denc_train, y_train.detach().cpu().numpy())
-pred  = model.predict(denc_valid)
-record['acc'] = (pred == y_valid.detach().cpu().numpy()).mean()
-# <<
+# model = LinearSVC().fit(denc_train, y_train.detach().cpu().numpy())
+# pred  = model.predict(denc_valid)
+# record['acc'] = (pred == y_valid.detach().cpu().numpy()).mean()
+# # <<
 
-print(record)
-sys.stdout.flush()
-all_records.append(record)
+# print(record)
+# sys.stdout.flush()
+# all_records.append(record)
 
-# print('epoch per second', epoch / (time() - t), file=sys.stderr)
+# # print('epoch per second', epoch / (time() - t), file=sys.stderr)
 
-# --
-# Print summary
+# # --
+# # Print summary
 
-df = pd.DataFrame(all_records)
+# df = pd.DataFrame(all_records)
 
-print('-' * 50, file=sys.stderr)
-print(df.mean(), file=sys.stderr)
-print(df.std(), file=sys.stderr)
+# print('-' * 50, file=sys.stderr)
+# print(df.mean(), file=sys.stderr)
+# print(df.std(), file=sys.stderr)
 
 

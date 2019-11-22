@@ -24,12 +24,14 @@ def exact_ppr(adj, alpha, mode='sym'):
 # --
 # Approximate (large graphs)
 
-# @jit(nopython=True)
+# K = 128
+
+@jit(nopython=True)
 def _ppr_inner_loop(seed, degrees, adj_indices, adj_indptr, alpha, epsilon):
     num_nodes = degrees.shape[0]
     
-    p = np.zeros(num_nodes)
-    r = np.zeros(num_nodes)
+    p = np.zeros(num_nodes, dtype=np.float64)
+    r = np.zeros(num_nodes, dtype=np.float64)
     r[seed] = 1
     
     frontier = np.array([seed])
@@ -56,17 +58,31 @@ def _ppr_inner_loop(seed, degrees, adj_indices, adj_indptr, alpha, epsilon):
     
     return p
 
-# @jit(nopython=True, parallel=True)
+
+@jit(nopython=True, parallel=True)
 def _parallel_pr_nibble(seeds, degrees, adj_indices, adj_indptr, alpha, epsilon):
-    out = np.zeros((len(seeds), degrees.shape[0]))
-    # for i in prange(len(seeds)):
-    for i in range(len(seeds)):
-        out[i] = _ppr_inner_loop(seeds[i], degrees, adj_indices, adj_indptr, alpha, epsilon)
+    n_nodes = degrees.shape[0]
+    # indices = np.zeros((len(seeds), K), dtype=np.int32)
+    # values  = np.zeros((len(seeds), K), dtype=np.float32)
+    ppr     = np.zeros((len(seeds), n_nodes), dtype=np.float32)
+    
+    for i in prange(len(seeds)):
+        p = _ppr_inner_loop(
+            seeds[i], degrees, adj_indices, adj_indptr, alpha, epsilon)
+        
+        # >>
+        # indices[i] = np.argsort(-p)[:K]
+        # values[i]  = p[indices[i]]
+        # --
+        ppr[i] = p
+        # <<
+        
         if not (i + 1) % 5000:
             print('.')
     
-    return out
+    # return values, indices
+    return ppr
 
-def parallel_pr_nibble(seeds, adj, alpha=0.1, epsilon=1e-5):
+def parallel_pr_nibble(seeds, adj, alpha, epsilon=1e-5):
     degrees = adj @ np.ones(adj.shape[0])
     return _parallel_pr_nibble(seeds, degrees, adj.indices, adj.indptr, alpha, epsilon)
