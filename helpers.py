@@ -55,17 +55,3 @@ class SimpleEarlyStopping:
         return False
 
 
-def calc_A_hat(adj, mode):
-    A = adj + sp.eye(adj.shape[0])
-    D = np.sum(A, axis=1).A1
-    if mode == 'sym':
-        D_inv = sp.diags(1 / np.sqrt(D))
-        return D_inv @ A @ D_inv
-    elif mode == 'rw':
-        D_inv = sp.diags(1 / D)
-        return D_inv @ A
-
-def compute_ppr(adj, alpha, mode='sym'):
-    A_hat   = calc_A_hat(adj, mode=mode)
-    A_inner = sp.eye(adj.shape[0]) - (1 - alpha) * A_hat
-    return alpha * np.linalg.inv(A_inner.toarray())

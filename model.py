@@ -39,29 +39,24 @@ class CustomLinear(nn.Module):
 
 
 class PPNP(nn.Module):
-    def __init__(self, n_features, n_classes, ppr, hidden_dim=64, drop_prob=0.5, bias=False):
+    def __init__(self, n_features, n_classes, ppr, hidden_dim=64):
         
         super().__init__()
         
         self.encoder = nn.Sequential(
-            nn.Dropout(drop_prob),
-            CustomLinear(n_features, hidden_dim, bias=bias),
+            nn.Dropout(0.5),
+            CustomLinear(n_features, hidden_dim, bias=False),
             nn.ReLU(inplace=True),
-            nn.Dropout(drop_prob),
-            nn.Linear(hidden_dim, n_classes, bias=bias)
+            nn.Dropout(0.5),
+            nn.Linear(hidden_dim, n_classes, bias=False)
         )
         
-        self.register_buffer('ppr', ppr)
+        self.ppr = ppr
         
         self._reg_params = list(self.encoder[1].parameters())
     
     def get_norm(self):
         return sum((torch.sum(param ** 2) for param in self._reg_params))
     
-    def forward(self, X, idx=None, ppr=None):
-        if idx is not None:
-            return self.ppr[idx] @ self.encoder(X)
-        elif ppr is not None:
-            return ppr @ self.encoder(X)
-        else:
-            raise Exception()
+    def forward(self, X, idx):
+        return self.ppr(X, idx, self.encoder)

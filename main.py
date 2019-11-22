@@ -28,7 +28,8 @@ from ppnp.data.sparsegraph import SparseGraph
 from ppnp.preprocessing import gen_splits, normalize_attributes
 
 from model import PPNP
-from helpers import set_seeds, compute_ppr, SimpleEarlyStopping
+from helpers import set_seeds, SimpleEarlyStopping
+from ppr import ExactPPR
 
 def gen_seeds():
     max_uint32 = np.iinfo(np.uint32).max
@@ -47,6 +48,8 @@ def parse_args():
     parser.add_argument('--reg-lambda',       type=float, default=5e-3)
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
+    parser.add_argument('--ppr-topk',         type=int)
+    parser.add_argument('--sparse',           action="store_true")
     parser.add_argument('--test',             action="store_true")
     
     parser.add_argument('--verbose', action="store_true")
@@ -103,8 +106,11 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    ppr   = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=args.alpha))
-    model = PPNP(n_features=X.shape[1], n_classes=y.max() + 1, ppr=ppr).cuda()
+    model = PPNP(
+        n_features = X.shape[1],
+        n_classes  = y.max() + 1,
+        ppr        = ExactPPR(adj=graph.adj_matrix, alpha=args.alpha)
+    ).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     
