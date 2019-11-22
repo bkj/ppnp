@@ -74,9 +74,9 @@ class UnsupervisedPPNP(nn.Module):
         self.register_buffer('ppr', ppr)
         
         if ppr_topk is not None:
-            topk = ppr.topk(ppr_topk, dim=-1)
-            self.register_buffer('topk_values', topk.values)
-            self.register_buffer('topk_indices', topk.indices)
+            ppr_topk = ppr.topk(ppr_topk, dim=-1)
+            self.register_buffer('ppr_values', ppr_topk.values)
+            self.register_buffer('ppr_indices', ppr_topk.indices)
     
     def get_norm(self):
         return 0
@@ -93,10 +93,29 @@ class UnsupervisedPPNP(nn.Module):
                 ppr_sub  = ppr_sub[:,sel]
                 diff_enc = ppr_sub @ enc[sel]
         else:
-            raise Exception()
-            indices  = self.topk_indices[idx]
-            values   = self.topk_values[idx]
-            
+            indices  = self.ppr_indices[idx]
+            values   = self.ppr_values[idx]
             diff_enc = (enc[indices] * values.unsqueeze(-1)).sum(axis=1) # ?? Best way?  Einsum? More memory efficient way?
         
         return enc[idx], diff_enc
+
+
+class SparseUnsupervisedPPNP(nn.Module):
+    def __init__(self, n_nodes, ppr_values, ppr_indices):
+        super().__init__()
+        
+        self.emb = nn.Embedding(n_nodes, 128)
+        self.register_buffer('ppr_values', ppr_values)
+        self.register_buffer('ppr_indices', ppr_indices)
+    
+    def get_norm(self):
+        return 0
+    
+    def forward(self, idx=None, batched=False, sparse=False):
+        enc = F.normalize(self.emb.weight, dim=-1) # Prevent from degenerate
+        
+        indices  = self.ppr_indices[idx]
+        values   = self.ppr_values[idx]
+        diff_enc = (enc[indices] * values.unsqueeze(-1)).sum(axis=1) # ?? Best way?  Einsum? More memory efficient way?
+        return enc[idx], diff_enc
+

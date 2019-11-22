@@ -111,11 +111,13 @@ for _ in range(args.n_runs):
     
     ppr = torch.FloatTensor(compute_ppr(graph.adj_matrix, alpha=args.alpha))
     
+    
     if not args.sparse:
         # Sparsify PPR matrix
-        thresh, _ = ppr.topk(args.ppr_topk, axis=-1)
-        ppr[ppr < thresh[:,-1]] = 0
-        model = UnsupervisedPPNP(ppr=ppr).cuda()
+        thresh, _         = ppr.topk(args.ppr_topk, axis=-1)
+        thresh            = thresh[:,-1].view(-1, 1)         # Weirdly, truncating _columns_ may perform better?  Need to test
+        ppr[ppr < thresh] = 0
+        model             = UnsupervisedPPNP(ppr=ppr).cuda()
     else:
         model = UnsupervisedPPNP(ppr=ppr, ppr_topk=args.ppr_topk).cuda()
     

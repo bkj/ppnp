@@ -40,7 +40,7 @@ python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --b
 
 python unsupervised-main.py
 
-python batch-unsupervised-main.py
-python batch-unsupervised-main.py --sparse
+CUDA_VISIBLE_DEVICES=6 python batch-unsupervised-main.py --n-runs 32
+CUDA_VISIBLE_DEVICES=6 python batch-unsupervised-main.py --n-runs 32 --sparse
 
 # !! Truncating PPR helps (on cora_ml)
