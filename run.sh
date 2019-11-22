@@ -51,3 +51,9 @@ python main.py --n-runs 5 --ppr-topk 128 --sparse
 python main.py --n-runs 5 --ppr-topk 128 --ppr-mode nibble
 python main.py --n-runs 5 --ppr-mode nibble --max-epochs 500
 python main.py --n-runs 5 --ppr-topk 128 --ppr-mode nibble --sparse --max-epochs 500
+
+# --
+# Scaling experiments
+
+mkdir -p data
+python utils/dump.py

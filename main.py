@@ -79,6 +79,13 @@ for _ in range(args.n_runs):
     graph = SparseGraph.from_flat_dict(dict(graph))
     graph.standardize(select_lcc=True)
     
+    adj = graph.adj_matrix
+    
+    if args.ppr_mode == 'nibble':
+        # I _think_ this is necessary?
+        adj = sp.eye(adj.shape[0]) + adj
+        adj = (adj > 0).astype(np.float32)
+    
     idx_split_args = {
         'ntrain_per_class' : args.ntrain_per_class, # What is the score on the official split?
         'nstopping'        : args.nstopping,
@@ -108,13 +115,12 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
-    
     if args.ppr_mode == 'exact':
-        ppr = ExactPPR(adj=graph.adj_matrix, alpha=args.alpha, sparse=args.sparse, topk=args.ppr_topk)
+        ppr = ExactPPR(adj=adj, alpha=args.alpha, sparse=args.sparse, topk=args.ppr_topk)
     elif args.ppr_mode == 'nibble' and not args.sparse:
-        ppr = DenseNibblePPR(adj=graph.adj_matrix, alpha=args.alpha, topk=args.ppr_topk)
+        ppr = DenseNibblePPR(adj=adj, alpha=args.alpha, topk=args.ppr_topk)
     elif args.ppr_mode == 'nibble' and args.sparse:
-        ppr = SparseNibblePPR(adj=graph.adj_matrix, alpha=args.alpha, topk=args.ppr_topk)
+        ppr = SparseNibblePPR(adj=adj, alpha=args.alpha, topk=args.ppr_topk)
     else:
         raise Exception
     

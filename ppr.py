@@ -127,7 +127,7 @@ def _sparse_parallel_pr_nibble(seeds, degrees, adj_indices, adj_indptr, alpha, e
     for i in prange(len(seeds)):
         indices[i], values[i] = _sparse_ppr_inner_loop(
             seeds[i], degrees, adj_indices, adj_indptr, alpha, epsilon, topk)
-    
+        
     return indices, values
 
 def sparse_parallel_pr_nibble(seeds, adj, alpha, epsilon, topk):
