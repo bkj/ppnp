@@ -29,7 +29,7 @@ from ppnp.preprocessing import gen_splits, normalize_attributes
 
 from model import PPNP
 from helpers import set_seeds, SimpleEarlyStopping
-from ppr import ExactPPR
+from ppr import ExactPPR, DenseNibblePPR, SparseNibblePPR
 
 def gen_seeds():
     max_uint32 = np.iinfo(np.uint32).max
@@ -48,9 +48,11 @@ def parse_args():
     parser.add_argument('--reg-lambda',       type=float, default=5e-3)
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
-    parser.add_argument('--ppr-topk',         type=int)
-    parser.add_argument('--sparse',           action="store_true")
     parser.add_argument('--test',             action="store_true")
+
+    parser.add_argument('--sparse',           action="store_true")
+    parser.add_argument('--ppr-topk',         type=int)
+    parser.add_argument('--ppr-mode',         type=str, default='exact')
     
     parser.add_argument('--verbose', action="store_true")
     
@@ -106,10 +108,20 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
+    
+    if args.ppr_mode == 'exact':
+        ppr = ExactPPR(adj=graph.adj_matrix, alpha=args.alpha, sparse=args.sparse, topk=args.ppr_topk)
+    elif args.ppr_mode == 'nibble' and not args.sparse:
+        ppr = DenseNibblePPR(adj=graph.adj_matrix, alpha=args.alpha, topk=args.ppr_topk)
+    elif args.ppr_mode == 'nibble' and args.sparse:
+        ppr = SparseNibblePPR(adj=graph.adj_matrix, alpha=args.alpha, topk=args.ppr_topk)
+    else:
+        raise Exception
+    
     model = PPNP(
         n_features = X.shape[1],
         n_classes  = y.max() + 1,
-        ppr        = ExactPPR(adj=graph.adj_matrix, alpha=args.alpha)
+        ppr        = ppr
     ).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)

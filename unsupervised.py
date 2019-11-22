@@ -29,7 +29,7 @@ from ppnp.preprocessing import gen_splits, normalize_attributes
 
 from model import EmbeddingPPNP
 from helpers import set_seeds, SimpleEarlyStopping
-from ppr import ExactPPR
+from ppr import ExactPPR, DenseNibblePPR, SparseNibblePPR
 
 def gen_seeds():
     max_uint32 = np.iinfo(np.uint32).max
@@ -49,6 +49,10 @@ def parse_args():
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
     parser.add_argument('--test',             action="store_true")
+    
+    parser.add_argument('--sparse',           action="store_true")
+    parser.add_argument('--ppr-topk',         type=int)
+    parser.add_argument('--ppr-mode',         type=str, default='exact')
     
     parser.add_argument('--verbose', action="store_true")
     
@@ -88,11 +92,11 @@ for _ in range(args.n_runs):
     # --
     #  Define data
     
+    X = torch.arange(graph.adj_matrix.shape[0]) # Just doing embeddings
     y = torch.LongTensor(graph.labels)
     
     idx_train, idx_stop, idx_valid = gen_splits(graph.labels, idx_split_args, test=args.test)
     idx_train, idx_stop, idx_valid = map(torch.LongTensor, (idx_train, idx_stop, idx_valid))
-    idx_all = torch.arange(graph.adj_matrix.shape[0])
     
     y_train, y_stop, y_valid = y[idx_train], y[idx_stop], y[idx_valid]
     
@@ -101,9 +105,18 @@ for _ in range(args.n_runs):
     
     torch.manual_seed(seed=gen_seeds())
     
+    if args.ppr_mode == 'exact':
+        ppr = ExactPPR(adj=graph.adj_matrix, alpha=args.alpha, sparse=args.sparse, topk=args.ppr_topk)
+    elif args.ppr_mode == 'nibble' and not args.sparse:
+        ppr = DenseNibblePPR(adj=graph.adj_matrix, alpha=args.alpha, topk=args.ppr_topk)
+    elif args.ppr_mode == 'nibble' and args.sparse:
+        ppr = SparseNibblePPR(adj=graph.adj_matrix, alpha=args.alpha, topk=args.ppr_topk)
+    else:
+        raise Exception
+    
     model = EmbeddingPPNP(
         n_nodes = graph.adj_matrix.shape[0],
-        ppr     = ExactPPR(graph.adj_matrix, alpha=args.alpha),
+        ppr     = ppr
     ).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -118,7 +131,7 @@ for _ in range(args.n_runs):
         
         _ = model.train()
         
-        node_enc, hood_enc = model(X=idx_all, idx=idx_train)
+        node_enc, hood_enc = model(X=X, idx=idx_train)
         
         train_loss = ((node_enc - hood_enc) ** 2).mean()
         train_loss = train_loss + args.reg_lambda / 2 * model.get_norm()
@@ -133,7 +146,7 @@ for _ in range(args.n_runs):
         _ = model.eval()
         
         with torch.no_grad():
-            node_enc, hood_enc = model(X=idx_all, idx=idx_stop)
+            node_enc, hood_enc = model(X=X, idx=idx_stop)
             stop_loss = ((node_enc - hood_enc) ** 2).mean()
             stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
         
@@ -156,8 +169,8 @@ for _ in range(args.n_runs):
     # >>
     from sklearn.svm import LinearSVC
 
-    _, hood_enc_train = model(X=idx_all, idx=idx_train)
-    _, hood_enc_valid = model(X=idx_all, idx=idx_valid)
+    _, hood_enc_train = model(X=X, idx=idx_train)
+    _, hood_enc_valid = model(X=X, idx=idx_valid)
     
     hood_enc_train = hood_enc_train.detach().cpu().numpy()
     hood_enc_valid = hood_enc_valid.detach().cpu().numpy()

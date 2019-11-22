@@ -18,7 +18,7 @@ conda install -y pandas
 
 CUDA_VISIBLE_DEVICES=6 python main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
 # valid_acc = 0.856 (std=0.009)
-CUDA_VISIBLE_DEVICES=6 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
+CUDA_VISIBLE_DEVICES=6 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 32 --batch-size 512
 
 python main.py --inpath ppnp/data/citeseer.npz --n-runs 32
 # valid_acc = 0.760 (std=0.012)
@@ -36,3 +36,18 @@ CUDA_VISIBLE_DEIVCES=6 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-r
 
 python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 32 --ppr-topk 128
 python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 1024 --ppr-topk 256
+
+# --
+# Test variants
+
+python unsupervised.py --n-runs 5 --max-epochs 500
+python unsupervised.py --n-runs 5 --ppr-topk 128 --max-epochs 500
+python unsupervised.py --n-runs 5 --ppr-topk 128 --sparse --max-epochs 500
+python unsupervised.py --n-runs 5 --ppr-topk 128 --sparse --ppr-mode nibble --max-epochs 500
+
+python main.py --n-runs 5
+python main.py --n-runs 5 --ppr-topk 128
+python main.py --n-runs 5 --ppr-topk 128 --sparse
+python main.py --n-runs 5 --ppr-topk 128 --ppr-mode nibble
+python main.py --n-runs 5 --ppr-mode nibble --max-epochs 500
+python main.py --n-runs 5 --ppr-topk 128 --ppr-mode nibble --sparse --max-epochs 500

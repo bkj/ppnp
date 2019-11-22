@@ -61,6 +61,7 @@ class PPNP(nn.Module):
     def forward(self, X, idx):
         return self.ppr(X, idx, self.encoder)
 
+
 # Node Embedding Only
 class NormalizedEmbedding(nn.Module):
     def __init__(self, *args, **kwargs):
