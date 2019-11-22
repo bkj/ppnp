@@ -28,21 +28,6 @@ def exact_ppr(adj, alpha, mode='sym'):
     return alpha * np.linalg.inv(A_inner.toarray())
 
 
-    ppr = torch.FloatTensor(ppr)
-    if ppr_topk is None:
-        return ppr
-    
-    if ppr_topk:
-        topk = ppr.topk(ppr_topk, dim=-1)
-        
-        if sparse:
-            return topk.values, topk.indices
-        else:
-            thresh = topk.values[:,-1].view(-1, 1)
-            ppr[ppr < thresh] = 0
-            return ppr
-
-
 class ExactPPR(nn.Module):
     def __init__(self, adj, alpha, mode='sym', topk=None, sparse=False, batch=False):
         super().__init__()
@@ -76,6 +61,7 @@ class ExactPPR(nn.Module):
         self.batch  = batch
         
     def forward(self, X, idx, encoder):
+        
         # Straightforward
         if not self.sparse and not self.batch:
             return self.ppr[idx] @ encoder(X.cuda())
@@ -87,5 +73,10 @@ class ExactPPR(nn.Module):
             tmp = tmp[:,sel]
             
             return tmp @ encoder(X[sel].cuda())
+        
+        if self.sparse:
+            indices = self.indices[idx]
+            values  = self.values[idx]
+            return (encoder(indices) * values.unsqueeze(-1)).sum(axis=1)
         
         raise Exception()

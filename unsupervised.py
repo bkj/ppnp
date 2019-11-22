@@ -21,14 +21,13 @@ import scipy.sparse as sp
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.data import DataLoader, TensorDataset
 
 torch.backends.cudnn.deterministic = True
 
 from ppnp.data.sparsegraph import SparseGraph
 from ppnp.preprocessing import gen_splits, normalize_attributes
 
-from model import PPNP
+from model import EmbeddingPPNP
 from helpers import set_seeds, SimpleEarlyStopping
 from ppr import ExactPPR
 
@@ -40,20 +39,17 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inpath', type=str, default='ppnp/data/cora_ml.npz')
     parser.add_argument('--n-runs', type=int, default=5)
+    parser.add_argument('--seed',   type=int, default=123)
     
     parser.add_argument('--ntrain-per-class', type=int,   default=20)
     parser.add_argument('--nstopping',        type=int,   default=500)
     parser.add_argument('--nknown',           type=int,   default=1500)
-    parser.add_argument('--max-epochs',       type=int,   default=10_000)
+    parser.add_argument('--max-epochs',       type=int,   default=1000)
     parser.add_argument('--reg-lambda',       type=float, default=5e-3)
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
     parser.add_argument('--test',             action="store_true")
-
-    parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('--ppr-topk',   type=int, default=128)
-
-    parser.add_argument('--seed',   type=int, default=123)
+    
     parser.add_argument('--verbose', action="store_true")
     
     args = parser.parse_args()
@@ -71,6 +67,7 @@ set_seeds(args.seed)
 # --
 # Run
 
+
 all_records = []
 for _ in range(args.n_runs):
     
@@ -79,40 +76,34 @@ for _ in range(args.n_runs):
     graph.standardize(select_lcc=True)
     
     idx_split_args = {
-        'ntrain_per_class' : args.ntrain_per_class,
+        'ntrain_per_class' : args.ntrain_per_class, # What is the score on the official split?
         'nstopping'        : args.nstopping,
-        'nknown'           : args.nknown,
+        'nknown'           : args.nknown,            # What does this mean when test is true?
         # >>
         # 'seed'             : 2413340114,
-        'seed'             : gen_seeds(),  # Variance is too small if we don't do this
+        'seed'             : gen_seeds(),            # Variance is too small if we don't do this
         # <<
     }
     
     # --
     #  Define data
     
-    X = normalize_attributes(graph.attr_matrix)
-    X = np.asarray(X.todense())
-    X = torch.FloatTensor(X).cuda()
-    
     y = torch.LongTensor(graph.labels)
     
     idx_train, idx_stop, idx_valid = gen_splits(graph.labels, idx_split_args, test=args.test)
     idx_train, idx_stop, idx_valid = map(torch.LongTensor, (idx_train, idx_stop, idx_valid))
+    idx_all = torch.arange(graph.adj_matrix.shape[0])
     
     y_train, y_stop, y_valid = y[idx_train], y[idx_stop], y[idx_valid]
-    
-    train_loader = DataLoader(TensorDataset(idx_train, y_train), batch_size=args.batch_size, shuffle=True, num_workers=0)
     
     idx_train, idx_stop, idx_valid = map(lambda x: x.cuda(), (idx_train, idx_stop, idx_valid))
     y_train, y_stop, y_valid       = map(lambda x: x.cuda(), (y_train, y_stop, y_valid))
     
     torch.manual_seed(seed=gen_seeds())
     
-    model = PPNP(
-        n_features = X.shape[1],
-        n_classes  = y.max() + 1,
-        ppr        = ExactPPR(adj=graph.adj_matrix, alpha=args.alpha, batch=True)
+    model = EmbeddingPPNP(
+        n_nodes = graph.adj_matrix.shape[0],
+        ppr     = ExactPPR(graph.adj_matrix, alpha=args.alpha),
     ).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -127,20 +118,14 @@ for _ in range(args.n_runs):
         
         _ = model.train()
         
-        train_loss = 0
-        for idx_batch, y_batch in train_loader:
-            
-            y_batch = y_batch.cuda()
-            
-            logits = model(X, idx=idx_batch)
-            loss   = F.cross_entropy(logits, y_batch)
-            loss   = loss + args.reg_lambda / 2 * model.get_norm()
-            
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            
-            train_loss += loss
+        node_enc, hood_enc = model(X=idx_all, idx=idx_train)
+        
+        train_loss = ((node_enc - hood_enc) ** 2).mean()
+        train_loss = train_loss + args.reg_lambda / 2 * model.get_norm()
+        
+        opt.zero_grad()
+        train_loss.backward()
+        opt.step()
         
         # --
         # Stop
@@ -148,36 +133,43 @@ for _ in range(args.n_runs):
         _ = model.eval()
         
         with torch.no_grad():
-            logits    = model(X, idx=idx_stop)
-            stop_loss = F.cross_entropy(logits, y_stop)
+            node_enc, hood_enc = model(X=idx_all, idx=idx_stop)
+            stop_loss = ((node_enc - hood_enc) ** 2).mean()
             stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
-            
-            preds    = logits.argmax(dim=-1)
-            stop_acc = (preds == y_stop).float().mean()
-            
-            valid_acc = (model(X, idx_valid).argmax(dim=-1) == y_valid).float().mean() # !! Naughty
         
         record = {
-            "epoch"     : int(epoch),
-            "elapsed"   : float(time() - t),
-            "stop_acc"  : float(stop_acc),
-            "valid_acc" : float(valid_acc),
+            "epoch"      : int(epoch),
+            "elapsed"    : float(time() - t),
+            "train_loss" : float(train_loss),
+            "stop_loss"  : float(stop_loss),
         }
         
         if args.verbose:
             print(json.dumps(record), file=sys.stderr)
             sys.stderr.flush()
         
-        if early_stopping.should_stop(acc=float(stop_acc), loss=float(stop_loss), epoch=epoch, record=record):
+        if early_stopping.should_stop(acc=float(-stop_loss), loss=float(stop_loss), epoch=epoch, record=record):
             break
     
     record = early_stopping.record
     
+    # >>
+    from sklearn.svm import LinearSVC
+
+    _, hood_enc_train = model(X=idx_all, idx=idx_train)
+    _, hood_enc_valid = model(X=idx_all, idx=idx_valid)
+    
+    hood_enc_train = hood_enc_train.detach().cpu().numpy()
+    hood_enc_valid = hood_enc_valid.detach().cpu().numpy()
+
+    model = LinearSVC().fit(hood_enc_train, y_train.detach().cpu().numpy())
+    pred  = model.predict(hood_enc_valid)
+    record['acc'] = (pred == y_valid.detach().cpu().numpy()).mean()
+    # <<
+    
     print(record)
     sys.stdout.flush()
     all_records.append(record)
-    
-    # print('epoch per second', epoch / (time() - t), file=sys.stderr)
 
 # --
 # Print summary

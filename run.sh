@@ -16,8 +16,9 @@ conda install -y pandas
 # Run
 # !! Mean scores below match paper.  std's may be slightly different.
 
-python main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
+CUDA_VISIBLE_DEVICES=6 python main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
 # valid_acc = 0.856 (std=0.009)
+CUDA_VISIBLE_DEVICES=6 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
 
 python main.py --inpath ppnp/data/citeseer.npz --n-runs 32
 # valid_acc = 0.760 (std=0.012)
@@ -30,6 +31,8 @@ python main.py --inpath ppnp/data/ms_academic.npz --n-runs 10 --verbose | tee re
 
 # --
 # Test batch-main.py
+
+CUDA_VISIBLE_DEIVCES=6 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
 
 python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 32 --ppr-topk 128
 python batch-main.py --inpath ppnp/data/ms_academic.npz --n-runs 1 --verbose --batch-size 1024 --ppr-topk 256

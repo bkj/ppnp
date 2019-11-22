@@ -37,7 +37,7 @@ class CustomLinear(nn.Module):
         else:
             return torch.addmm(self.bias, input, self.weight)
 
-
+# Supervised
 class PPNP(nn.Module):
     def __init__(self, n_features, n_classes, ppr, hidden_dim=64):
         
@@ -60,3 +60,31 @@ class PPNP(nn.Module):
     
     def forward(self, X, idx):
         return self.ppr(X, idx, self.encoder)
+
+# Node Embedding Only
+class NormalizedEmbedding(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self._emb = nn.Embedding(*args, **kwargs)
+    
+    def forward(self, x):
+        w = F.normalize(self._emb.weight, dim=-1)
+        return w[x]
+
+
+class EmbeddingPPNP(nn.Module):
+    def __init__(self, n_nodes, ppr, hidden_dim=128):
+        
+        super().__init__()
+        
+        self.encoder = NormalizedEmbedding(n_nodes, hidden_dim)
+        self.ppr     = ppr
+    
+    def get_norm(self):
+        return 0
+    
+    def forward(self, X, idx):
+        node_enc = self.encoder(X[idx])
+        hood_enc = self.ppr(X, idx, self.encoder)
+        return node_enc, hood_enc
+
