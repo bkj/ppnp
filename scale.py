@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument('--ntrain-per-class', type=int,   default=20)
     parser.add_argument('--nstopping',        type=int,   default=500)
     parser.add_argument('--nknown',           type=int,   default=1500)
-    parser.add_argument('--max-epochs',       type=int,   default=20)
+    parser.add_argument('--max-epochs',       type=int,   default=40)
     parser.add_argument('--reg-lambda',       type=float, default=5e-3)
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
@@ -174,7 +174,8 @@ for epoch in range(args.max_epochs):
         sys.stderr.flush()
 
 
-# >>
+# --
+# Train classifier
 
 from sklearn import metrics
 from sklearn.svm import LinearSVC
@@ -197,18 +198,14 @@ labels         = pd.read_csv('/home/bjohnson/.graphvite/dataset/youtube/youtube_
 labels.columns = ('id', 'label')
 labels         = labels[labels.id.isin(idx_all)]
 
-
-labs = np.array(labels.label.value_counts().index)
-Y    = np.column_stack([labels.id.isin(labels.id[labels.label == l]).values for l in labs])
-Y.mean(axis=0)
-
+ulabs = np.array(labels.label.value_counts().index)
+Y     = np.column_stack([labels.id.isin(labels.id[labels.label == l]).values for l in ulabs])
 
 XX = all_encs[labels.id.values]
 
-
-XX_train, XX_valid, Y_train, Y_valid = train_test_split(XX, Y, train_size=0.05)
-model = RandomForestClassifier(n_estimators=100, n_jobs=60, verbose=1).fit(XX_train, Y_train)
-preds = model.predict(XX_valid)
+XX_train, XX_valid, Y_train, Y_valid = train_test_split(XX, Y, train_size=0.1)
+classifier = RandomForestClassifier(n_estimators=100, n_jobs=60, verbose=1).fit(XX_train, Y_train)
+preds = classifier.predict(XX_valid)
 metrics.f1_score(Y_valid, preds, average='micro')
 metrics.f1_score(Y_valid, preds, average='macro')
 
