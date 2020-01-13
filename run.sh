@@ -8,7 +8,7 @@
 conda create -y -n ppnp_env python=3.7
 conda activate ppnp_env
 
-conda install -y -c pytorch pytorch=1.2.0
+conda install -y -c pytorch pytorch=1.3.1
 conda install -y scipy=1.3.1
 conda install -y pandas
 
@@ -18,6 +18,7 @@ conda install -y pandas
 
 CUDA_VISIBLE_DEVICES=6 python main.py --inpath ppnp/data/cora_ml.npz --n-runs 32
 # valid_acc = 0.856 (std=0.009)
+
 CUDA_VISIBLE_DEVICES=6 python batch-main.py --inpath ppnp/data/cora_ml.npz --n-runs 32 --batch-size 512
 
 python main.py --inpath ppnp/data/citeseer.npz --n-runs 32
