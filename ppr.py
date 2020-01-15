@@ -168,6 +168,17 @@ class _PPR(nn.Module):
         
         raise Exception()
 
+
+from ppr import _PPR
+class PrecomputedPPR(_PPR):
+    def __init__(self, ppr):
+        super().__init__()
+        self.register_buffer('ppr', torch.FloatTensor(ppr))
+        
+        self.sparse = False
+        self.batch  = False
+
+
 class ExactPPR(_PPR):
     def __init__(self, adj, alpha, mode='sym', topk=None, sparse=False, batch=False):
         super().__init__()

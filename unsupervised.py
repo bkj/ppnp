@@ -5,6 +5,9 @@
     
     Use IO + preprocessing + random seeds from https://github.com/klicperajo/ppnp
     to guarantee reproducibility
+    
+    !! Training w/ a small number of nodes?  Is that good?  Could we do better
+    w/ more training nodes?
 """
 
 import os
