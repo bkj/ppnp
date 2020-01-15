@@ -1,3 +1,4 @@
+*.npy
 tmp.png
 data/*
 .ipynb_checkpoints
