@@ -119,7 +119,7 @@ for _ in range(args.n_runs):
     
     model = EmbeddingPPNP(
         n_nodes = graph.adj_matrix.shape[0],
-        ppr     = ppr
+        ppr     = ppr,
     ).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -134,7 +134,8 @@ for _ in range(args.n_runs):
         
         _ = model.train()
         
-        node_enc, hood_enc = model(X=X, idx=idx_train)
+        idx = np.random.choice(X.shape[0], 2 ** 12, replace=True)
+        node_enc, hood_enc = model(X=X, idx=idx)
         
         train_loss = ((node_enc - hood_enc) ** 2).mean()
         train_loss = train_loss + args.reg_lambda / 2 * model.get_norm()
@@ -143,42 +144,45 @@ for _ in range(args.n_runs):
         train_loss.backward()
         opt.step()
         
-        # --
-        # Stop
+        # # --
+        # # Stop
         
-        _ = model.eval()
+        # _ = model.eval()
         
-        with torch.no_grad():
-            node_enc, hood_enc = model(X=X, idx=idx_stop)
-            stop_loss = ((node_enc - hood_enc) ** 2).mean()
-            stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
+        # with torch.no_grad():
+        #     node_enc, hood_enc = model(X=X, idx=idx_stop)
+        #     stop_loss = ((node_enc - hood_enc) ** 2).mean()
+        #     stop_loss = stop_loss + args.reg_lambda / 2 * model.get_norm()
         
-        record = {
-            "epoch"      : int(epoch),
-            "elapsed"    : float(time() - t),
-            "train_loss" : float(train_loss),
-            "stop_loss"  : float(stop_loss),
-        }
+        # record = {
+        #     "epoch"      : int(epoch),
+        #     "elapsed"    : float(time() - t),
+        #     "train_loss" : float(train_loss),
+        #     "stop_loss"  : float(stop_loss),
+        # }
         
-        if args.verbose:
-            print(json.dumps(record), file=sys.stderr)
-            sys.stderr.flush()
+        # if args.verbose:
+        #     print(json.dumps(record), file=sys.stderr)
+        #     sys.stderr.flush()
         
-        if early_stopping.should_stop(acc=float(-stop_loss), loss=float(stop_loss), epoch=epoch, record=record):
-            break
+        # if early_stopping.should_stop(acc=float(-stop_loss), loss=float(stop_loss), epoch=epoch, record=record):
+        #     break
     
-    record = early_stopping.record
+    # record = early_stopping.record
+    record = {}
     
     # >>
-    from sklearn.svm import LinearSVC
+    # from sklearn.svm import LinearSVC
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import normalize
 
     _, hood_enc_train = model(X=X, idx=idx_train)
     _, hood_enc_valid = model(X=X, idx=idx_valid)
     
-    hood_enc_train = hood_enc_train.detach().cpu().numpy()
-    hood_enc_valid = hood_enc_valid.detach().cpu().numpy()
+    hood_enc_train = normalize(hood_enc_train.detach().cpu().numpy(), axis=1)
+    hood_enc_valid = normalize(hood_enc_valid.detach().cpu().numpy(), axis=1)
 
-    model = LinearSVC().fit(hood_enc_train, y_train.detach().cpu().numpy())
+    model = RandomForestClassifier(n_estimators=512, n_jobs=10).fit(hood_enc_train, y_train.detach().cpu().numpy())
     pred  = model.predict(hood_enc_valid)
     record['acc'] = (pred == y_valid.detach().cpu().numpy()).mean()
     # <<
