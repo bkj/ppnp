@@ -44,16 +44,19 @@ class PPNP(nn.Module):
         super().__init__()
         
         self.encoder = nn.Sequential(
-            nn.Dropout(0.5),
-            CustomLinear(n_features, hidden_dim, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(hidden_dim, n_classes, bias=False)
+            # nn.Dropout(0.5),
+            # CustomLinear(n_features, hidden_dim, bias=False),
+            # nn.ReLU(inplace=True),
+            # nn.Dropout(0.5),
+            # nn.Linear(hidden_dim, n_classes, bias=False)
+            
+            CustomLinear(n_features, n_classes, bias=False)
         )
         
         self.ppr = ppr
         
-        self._reg_params = list(self.encoder[1].parameters())
+        # self._reg_params = list(self.encoder[1].parameters())
+        self._reg_params = []
     
     def get_norm(self):
         return sum((torch.sum(param ** 2) for param in self._reg_params))

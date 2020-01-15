@@ -8,9 +8,20 @@
 conda create -y -n ppnp_env python=3.7
 conda activate ppnp_env
 
-conda install -y -c pytorch pytorch=1.3.1
+conda install -y -c pytorch pytorch=1.3.1 cudatoolkit=10.0
 conda install -y scipy=1.3.1
 conda install -y pandas
+conda install -y numba
+conda install -y scikit-learn
+
+pip install networkx
+
+
+# >>
+
+python main.py
+
+# <<
 
 # --
 # Run

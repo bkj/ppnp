@@ -18,6 +18,10 @@ import pandas as pd
 from time import time
 import scipy.sparse as sp
 
+import networkx as nx
+from sklearn import metrics
+from sklearn.model_selection import train_test_split
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -41,15 +45,15 @@ def parse_args():
     parser.add_argument('--n-runs', type=int, default=5)
     parser.add_argument('--seed',   type=int, default=123)
     
-    parser.add_argument('--ntrain-per-class', type=int,   default=20)
-    parser.add_argument('--nstopping',        type=int,   default=500)
-    parser.add_argument('--nknown',           type=int,   default=1500)
+    # parser.add_argument('--ntrain-per-class', type=int,   default=20)
+    # parser.add_argument('--nstopping',        type=int,   default=500)
+    # parser.add_argument('--nknown',           type=int,   default=1500)
     parser.add_argument('--max-epochs',       type=int,   default=10_000)
     parser.add_argument('--reg-lambda',       type=float, default=5e-3)
     parser.add_argument('--lr',               type=float, default=0.01)
     parser.add_argument('--alpha',            type=float, default=0.1)
     parser.add_argument('--test',             action="store_true")
-
+    
     parser.add_argument('--sparse',           action="store_true")
     parser.add_argument('--ppr-topk',         type=int)
     parser.add_argument('--ppr-mode',         type=str, default='exact')
@@ -71,13 +75,25 @@ set_seeds(args.seed)
 # --
 # Run
 
+adj = np.load('/home/bjohnson/projects/spectral-experiments/A2_sparse.npy')
+row, col, val = adj.T
+adj = sp.csr_matrix((val, (row.astype(int), col.astype(int))))
+
+y   = np.load('/home/bjohnson/projects/spectral-experiments/y.npy') == 1
 
 all_records = []
 for _ in range(args.n_runs):
     
-    graph = np.load(args.inpath, allow_pickle=True)
-    graph = SparseGraph.from_flat_dict(dict(graph))
-    graph.standardize(select_lcc=True)
+    # graph = np.load(args.inpath, allow_pickle=True)
+    # graph = SparseGraph.from_flat_dict(dict(graph))
+    # graph.standardize(select_lcc=True)
+    
+    attr_matrix = np.eye(adj.shape[0])
+    graph = SparseGraph(
+        adj_matrix=adj,
+        attr_matrix=attr_matrix,
+        labels=y
+    )
     
     adj = graph.adj_matrix
     
@@ -86,26 +102,22 @@ for _ in range(args.n_runs):
         adj = sp.eye(adj.shape[0]) + adj
         adj = (adj > 0).astype(np.float32)
     
-    idx_split_args = {
-        'ntrain_per_class' : args.ntrain_per_class, # What is the score on the official split?
-        'nstopping'        : args.nstopping,
-        'nknown'           : args.nknown,            # What does this mean when test is true?
-        # >>
-        # 'seed'             : 2413340114,
-        'seed'             : gen_seeds(),            # Variance is too small if we don't do this
-        # <<
-    }
-    
     # --
     #  Define data
     
     X = normalize_attributes(graph.attr_matrix)
-    X = np.asarray(X.todense())
+    # X = np.asarray(X.todense())
     X = torch.FloatTensor(X).cuda()
     
     y = torch.LongTensor(graph.labels)
     
-    idx_train, idx_stop, idx_valid = gen_splits(graph.labels, idx_split_args, test=args.test)
+    # <<
+    sel = np.random.choice([0, 1, 2], size=X.shape[0], p=[0.05, 0.05, 0.9])
+    idx_train, idx_stop, idx_valid = \
+        np.where(sel == 0)[0], np.where(sel == 1)[0], np.where(sel == 2)[0]
+    # idx_train, idx_stop, idx_valid = gen_splits(graph.labels, idx_split_args, test=args.test)
+    # >>
+    
     idx_train, idx_stop, idx_valid = map(torch.LongTensor, (idx_train, idx_stop, idx_valid))
     
     y_train, y_stop, y_valid = y[idx_train], y[idx_stop], y[idx_valid]
@@ -127,7 +139,8 @@ for _ in range(args.n_runs):
     model = PPNP(
         n_features = X.shape[1],
         n_classes  = y.max() + 1,
-        ppr        = ppr
+        ppr        = ppr,
+        hidden_dim = 16
     ).cuda()
     
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -166,7 +179,14 @@ for _ in range(args.n_runs):
             preds    = logits.argmax(dim=-1)
             stop_acc = (preds == y_stop).float().mean()
             
-            valid_acc = (model(X, idx_valid).argmax(dim=-1) == y_valid).float().mean() # !! Naughty
+            pred_valid = model(X, idx_valid).argmax(dim=-1)
+            valid_acc  = (pred_valid == y_valid).float().mean() # !! Naughty
+            
+            valid_f1   = metrics.f1_score(
+                y_valid.cpu().numpy(),
+                pred_valid.cpu().numpy(),
+                average='macro',
+            )
         
         record = {
             "epoch"     : int(epoch),
@@ -174,6 +194,8 @@ for _ in range(args.n_runs):
             "train_acc" : float(train_acc),
             "stop_acc"  : float(stop_acc),
             "valid_acc" : float(valid_acc),
+            
+            "valid_f1"  : float(valid_f1),
         }
         
         if args.verbose:
